@@ -21,8 +21,9 @@ log = logging.getLogger("polly-tts")
 
 # ── Voice presets ────────────────────────────────────────────────────────────
 VOICE_PRESETS = {
-    "cantonese": {"voice": "Hiujin", "lang": "yue-CN"},
-    "mandarin":  {"voice": "Zhiyu",  "lang": "cmn-CN"},
+    "cantonese": {"voice": "Hiujin",    "lang": "yue-CN"},
+    "mandarin":  {"voice": "Zhiyu",     "lang": "cmn-CN"},
+    "english":   {"voice": "Matthew",   "lang": "en-US"},
 }
 
 
@@ -151,8 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "voice presets:\n"
-            "  cantonese  -> Hiujin / yue-CN\n"
-            "  mandarin   -> Zhiyu  / cmn-CN\n"
+            "  cantonese  -> Hiujin    / yue-CN\n"
+            "  mandarin   -> Zhiyu     / cmn-CN\n"
+            "  english    -> Matthew   / en-US\n"
         ),
     )
     p.add_argument("input", help="Path to the input .pptx file")
@@ -200,7 +202,16 @@ def main() -> None:
         log.error("File not found: %s", input_path)
         sys.exit(1)
 
-    output_path = Path(args.output) if args.output else input_path.with_name(f"narrated_{input_path.name}")
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        stem = input_path.stem
+        suffix = input_path.suffix
+        output_path = input_path.with_name(f"narrated_{stem}{suffix}")
+        i = 1
+        while output_path.exists():
+            output_path = input_path.with_name(f"narrated_{stem}_{i}{suffix}")
+            i += 1
 
     try:
         prs = Presentation(str(input_path))
