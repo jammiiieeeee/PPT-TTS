@@ -1,0 +1,18 @@
+# Generated output
+narrated_*.pptx
+polly_audio/
+
+# Source presentations (user's files, not code)
+*.pptx
+
+# Temp files
+_*.pptx
+_*.py
+test_*.pptx
+test_*.mp3
+*.mp3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
