@@ -16,3 +16,13 @@ test_*.mp3
 __pycache__/
 *.pyc
 *.pyo
+venv/
+.venv/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# AWS credentials (ships as config.json, not committed)
+config.json
