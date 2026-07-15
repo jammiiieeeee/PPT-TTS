@@ -127,6 +127,29 @@ def parse_slide_range(spec: str, total: int) -> list[int]:
     return sorted(indices)
 
 
+def detect_language(filename: str) -> str:
+    """Heuristically detect voice preset from the filename.
+
+    Returns the preset key (``"mandarin"`` or ``"english"``) based on the
+    ratio of CJK characters to total non-whitespace characters.  If the
+    filename is predominantly Chinese, ``"mandarin"`` is returned; otherwise
+    ``"english"``.
+    """
+    import unicodedata
+    text = Path(filename).stem
+    cjk = total = 0
+    for ch in text:
+        if ch.isspace():
+            continue
+        total += 1
+        if unicodedata.category(ch).startswith(("Lo",)):
+            # "Lo" = Letter, other — covers CJK ideographs, kana, hangul, etc.
+            cjk += 1
+    if total == 0:
+        return "mandarin"
+    return "mandarin" if cjk / total > 0.3 else "english"
+
+
 def apply_corrections(text: str, corrections: list[dict]) -> str:
     """Apply pronunciation corrections to *text* using longest-match-first.
 
@@ -712,6 +735,7 @@ class PPTTTSApp:
         preset_combo.grid(row=0, column=1, sticky="w")
         # Map display label back to key
         self._preset_keys = list(PRESET_LABELS.keys())
+        self._preset_combo = preset_combo
         preset_combo.current(0)
 
         ttk.Label(opt_frame, text="Slides (opt):").grid(
@@ -747,6 +771,9 @@ class PPTTTSApp:
             filetypes=[("PowerPoint files", "*.pptx"), ("All files", "*.*")])
         if path:
             self.input_path.set(path)
+            detected = detect_language(path)
+            idx = self._preset_keys.index(detected) if detected in self._preset_keys else 0
+            self._preset_combo.current(idx)
 
     def _open_corrections(self):
         CorrectionsDialog(self.root, self.config)
