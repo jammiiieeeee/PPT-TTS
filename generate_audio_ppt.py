@@ -27,13 +27,11 @@ log = logging.getLogger("polly-tts")
 
 # ── Voice presets ────────────────────────────────────────────────────────────
 VOICE_PRESETS = {
-    "cantonese": {"voice": "Hiujin", "lang": "yue-CN"},
     "mandarin": {"voice": "Zhiyu", "lang": "cmn-CN"},
     "english": {"voice": "Matthew", "lang": "en-US"},
 }
 
 PRESET_LABELS = {
-    "cantonese": "Cantonese (Hiujin)",
     "mandarin": "Mandarin (Zhiyu)",
     "english": "English (Matthew)",
 }
@@ -341,7 +339,6 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "voice presets:\n"
-            "  cantonese  -> Hiujin    / yue-CN\n"
             "  mandarin   -> Zhiyu     / cmn-CN\n"
             "  english    -> Matthew   / en-US\n"
             "\nRun with no arguments to open the GUI."
@@ -349,10 +346,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("input", nargs="?", help="Path to the input .pptx file")
     p.add_argument("-o", "--output", help="Output file path (default: narrated_<input>)")
-    p.add_argument("--voice", default="Hiujin", help="Polly voice ID (default: Hiujin)")
+    p.add_argument("--voice", default="Zhiyu", help="Polly voice ID (default: Zhiyu)")
     p.add_argument("--engine", choices=["standard", "neural"], default="neural",
                    help="TTS engine (default: neural)")
-    p.add_argument("--lang", default="yue-CN", help="Language code (default: yue-CN)")
+    p.add_argument("--lang", default="cmn-CN", help="Language code (default: cmn-CN)")
     p.add_argument("--preset", choices=list(VOICE_PRESETS), default=None,
                    help="Use a named voice preset instead of --voice/--lang")
     p.add_argument("--slides", default=None,
@@ -428,7 +425,7 @@ class CorrectionsDialog:
     def __init__(self, parent: tk.Tk, config: dict):
         self.config = config
         self.pronunciations = load_pronunciations(config)
-        self.active_voice = tk.StringVar(value="cantonese")
+        self.active_voice = tk.StringVar(value="mandarin")
 
         self.win = tk.Toplevel(parent)
         self.win.title("Pronunciation Corrections")
@@ -703,7 +700,7 @@ class PPTTTSApp:
         self.root.resizable(False, False)
 
         self.input_path = tk.StringVar()
-        self.preset_var = tk.StringVar(value="cantonese")
+        self.preset_var = tk.StringVar(value="mandarin")
         self.slides_var = tk.StringVar()
         self.processing = False
         self.config = load_config()

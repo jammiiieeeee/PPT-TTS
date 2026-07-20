@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "ppt-tts"
+version = "1.0.0"
+description = "Add AWS Polly TTS narration to PowerPoint slides for Storyline 360 import."
+requires-python = ">=3.10"
+dependencies = [
+    "python-pptx>=0.6.23",
+    "boto3>=1.28",
+    "lxml>=4.9",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.scripts]
+ppt-tts = "generate_audio_ppt:cli_main"
+
+[tool.setuptools]
+py-modules = ["generate_audio_ppt"]
