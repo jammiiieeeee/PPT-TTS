@@ -29,11 +29,13 @@ log = logging.getLogger("polly-tts")
 VOICE_PRESETS = {
     "mandarin": {"voice": "Zhiyu", "lang": "cmn-CN"},
     "english": {"voice": "Matthew", "lang": "en-US"},
+    "korean": {"voice": "Seoyeon", "lang": "ko-KR"},
 }
 
 PRESET_LABELS = {
     "mandarin": "Mandarin (Zhiyu)",
     "english": "English (Matthew)",
+    "korean": "Korean (Seoyeon)",
 }
 
 CONFIG_FILE = "config.json"
@@ -125,27 +127,47 @@ def parse_slide_range(spec: str, total: int) -> list[int]:
     return sorted(indices)
 
 
+def _is_hangul(ch: str) -> bool:
+    """Return True if *ch* is a Korean Hangul syllable or jamo."""
+    cp = ord(ch)
+    return (
+        0xAC00 <= cp <= 0xD7AF   # Hangul Syllables
+        or 0x1100 <= cp <= 0x11FF  # Hangul Jamo
+        or 0x3130 <= cp <= 0x318F  # Hangul Compatibility Jamo
+    )
+
+
+def _is_cjk_ideograph(ch: str) -> bool:
+    """Return True if *ch* is a CJK Unified Ideograph (Chinese/Japanese)."""
+    cp = ord(ch)
+    return 0x4E00 <= cp <= 0x9FFF
+
+
 def detect_language(filename: str) -> str:
     """Heuristically detect voice preset from the filename.
 
-    Returns the preset key (``"mandarin"`` or ``"english"``) based on the
-    ratio of CJK characters to total non-whitespace characters.  If the
-    filename is predominantly Chinese, ``"mandarin"`` is returned; otherwise
-    ``"english"``.
+    Returns ``"mandarin"``, ``"korean"``, or ``"english"`` based on the
+    character composition of the filename stem.
     """
-    import unicodedata
     text = Path(filename).stem
-    cjk = total = 0
+    hangul = cjk = total = 0
     for ch in text:
         if ch.isspace():
             continue
         total += 1
-        if unicodedata.category(ch).startswith(("Lo",)):
-            # "Lo" = Letter, other — covers CJK ideographs, kana, hangul, etc.
+        if _is_hangul(ch):
+            hangul += 1
+        elif _is_cjk_ideograph(ch):
             cjk += 1
     if total == 0:
         return "mandarin"
-    return "mandarin" if cjk / total > 0.3 else "english"
+    hangul_ratio = hangul / total
+    cjk_ratio = cjk / total
+    if hangul_ratio > 0.3:
+        return "korean"
+    if cjk_ratio > 0.3:
+        return "mandarin"
+    return "english"
 
 
 def apply_corrections(text: str, corrections: list[dict]) -> str:
@@ -341,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
             "voice presets:\n"
             "  mandarin   -> Zhiyu     / cmn-CN\n"
             "  english    -> Matthew   / en-US\n"
+            "  korean     -> Seoyeon   / ko-KR\n"
             "\nRun with no arguments to open the GUI."
         ),
     )
