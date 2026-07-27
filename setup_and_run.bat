@@ -44,12 +44,15 @@ if not exist config.json (
 )
 
 REM Validate config.json has real credentials
-%PYTHON% -c "import json,sys; c=json.load(open('config.json')); aws=c.get('aws',{}); k=aws.get('access_key_id',''); s=aws.get('secret_access_key',''); sys.exit(0 if k and s and not k.startswith('YOUR_') and not s.startswith('YOUR_') else 1)"
+%PYTHON% -c "import json,sys; c=json.load(open('config.json')); aws=c.get('aws',{}); k=aws.get('access_key_id',''); s=aws.get('secret_access_key',''); sys.exit(0 if k and s and not k.startswith('YOUR_') and not s.startswith('YOUR_') else 1)" 2>nul
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: config.json is missing valid AWS credentials.
+    echo ERROR: Could not read config.json.
     echo.
-    echo Opening config.json for you to edit - replace the placeholder values.
+    echo Please check that config.json is a valid file with your AWS credentials.
+    echo Make sure there are no extra spaces or tabs when pasting your keys.
+    echo.
+    echo Opening config.json for you to edit...
     notepad config.json
     echo.
     echo After saving the file, run this script again.
