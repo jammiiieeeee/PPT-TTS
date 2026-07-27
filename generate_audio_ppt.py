@@ -107,7 +107,7 @@ def create_polly_client(config: dict = None):
             kwargs["aws_secret_access_key"] = secret
             if aws.get("region"):
                 kwargs["region_name"] = aws["region"]
-        if aws.get("verify_ssl") is False:
+        if aws.get("verify_ssl", False) is False:
             kwargs["verify"] = False
     return boto3.client("polly", **kwargs)
 

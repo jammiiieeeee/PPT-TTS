@@ -58,7 +58,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-%PYTHON% -c "import json,boto3; c=json.load(open('config.json')); aws=c['aws']; kw={'aws_access_key_id':aws['access_key_id'],'aws_secret_access_key':aws['secret_access_key'],'region_name':aws.get('region','us-east-1')}; v=aws.get('verify_ssl',True); kw['verify']=v; sts=boto3.client('sts',**kw); r=sts.get_caller_identity(); print(f'Authenticated as: {r[\"Arn\"]}')" 2>nul
+%PYTHON% -c "import json,boto3; c=json.load(open('config.json')); aws=c['aws']; kw={'aws_access_key_id':aws['access_key_id'],'aws_secret_access_key':aws['secret_access_key'],'region_name':aws.get('region','us-east-1')}; v=aws.get('verify_ssl',False); kw['verify']=v; sts=boto3.client('sts',**kw); r=sts.get_caller_identity(); print(f'Authenticated as: {r[\"Arn\"]}')" 2>nul
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: AWS credentials are invalid or expired.
