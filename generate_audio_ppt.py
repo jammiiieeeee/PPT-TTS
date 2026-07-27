@@ -22,6 +22,9 @@ from botocore.config import Config as BotoConfig
 from pptx import Presentation
 from pptx.oxml.ns import qn
 from pptx.util import Inches
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("polly-tts")
 
@@ -104,6 +107,8 @@ def create_polly_client(config: dict = None):
             kwargs["aws_secret_access_key"] = secret
             if aws.get("region"):
                 kwargs["region_name"] = aws["region"]
+        if aws.get("verify_ssl") is False:
+            kwargs["verify"] = False
     return boto3.client("polly", **kwargs)
 
 
