@@ -43,14 +43,31 @@ if not exist config.json (
     %PYTHON% -c "import json; json.dump({'aws': {'access_key_id': 'YOUR_AWS_ACCESS_KEY_ID', 'secret_access_key': 'YOUR_AWS_SECRET_ACCESS_KEY', 'region': 'us-east-1'}}, open('config.json', 'w'), indent=4)"
 )
 
-REM Validate config.json has real credentials
+REM Validate config.json and test AWS credentials
+echo Validating AWS credentials...
 %PYTHON% -c "import json,sys; c=json.load(open('config.json')); aws=c.get('aws',{}); k=aws.get('access_key_id',''); s=aws.get('secret_access_key',''); sys.exit(0 if k and s and not k.startswith('YOUR_') and not s.startswith('YOUR_') else 1)" 2>nul
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: Could not read config.json.
+    echo ERROR: config.json is missing AWS credentials.
     echo.
-    echo Please check that config.json is a valid file with your AWS credentials.
-    echo Make sure there are no extra spaces or tabs when pasting your keys.
+    echo Please make sure config.json has your AWS Access Key ID and Secret Access Key.
+    echo You can get these from the AWS Console under IAM > Users > Security credentials.
+    echo.
+    echo Opening config.json for you to edit...
+    notepad config.json
+    echo.
+    echo After saving the file, run this script again.
+    pause
+    exit /b 1
+)
+
+%PYTHON% -c "import json,boto3; c=json.load(open('config.json')); aws=c['aws']; sts=boto3.client('sts',aws_access_key_id=aws['access_key_id'],aws_secret_access_key=aws['secret_access_key'],region_name=aws.get('region','us-east-1')); r=sts.get_caller_identity(); print(f'Authenticated as: {r[\"Arn\"]}')" 2>nul
+if %errorlevel% neq 0 (
+    echo.
+    echo ERROR: AWS credentials are invalid or expired.
+    echo.
+    echo Please check that your Access Key ID and Secret Access Key are correct.
+    echo Keys can be regenerated in the AWS Console under IAM > Users > Security credentials.
     echo.
     echo Opening config.json for you to edit...
     notepad config.json
