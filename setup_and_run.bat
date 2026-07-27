@@ -42,7 +42,6 @@ if not exist config.json (
 )
 
 REM Validate config.json and test AWS credentials
-echo Validating AWS credentials...
 %PYTHON% -c "import json,sys; c=json.load(open('config.json')); aws=c.get('aws',{}); k=aws.get('access_key_id',''); s=aws.get('secret_access_key',''); sys.exit(0 if k and s and not k.startswith('YOUR_') and not s.startswith('YOUR_') else 1)" 2>nul
 if %errorlevel% neq 0 (
     echo.
