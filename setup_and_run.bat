@@ -28,9 +28,7 @@ exit /b 1
 echo Found: %PYTHON%
 %PYTHON% --version
 
-echo.
-echo Installing dependencies...
-%PYTHON% -m pip install -r requirements.txt --quiet
+%PYTHON% -m pip install -r requirements.txt --quiet --disable-pip-version-check 2>nul
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: Failed to install dependencies.
