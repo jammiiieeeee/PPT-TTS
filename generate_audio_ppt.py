@@ -18,6 +18,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import boto3
+import windnd
 from botocore.config import Config as BotoConfig
 from pptx import Presentation
 from pptx.oxml.ns import qn
@@ -27,6 +28,33 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("polly-tts")
+
+
+# ── Tooltip helper ───────────────────────────────────────────────────────────
+class ToolTip:
+    """Tooltip that appears on hover over a widget."""
+
+    def __init__(self, widget: tk.Widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tip_window: tk.Toplevel | None = None
+        widget.bind("<Enter>", self._show)
+        widget.bind("<Leave>", self._hide)
+
+    def _show(self, event=None):
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(tw, text=self.text, background="#ffffe0",
+                         relief="solid", borderwidth=1, font=("Segoe UI", 9))
+        label.pack()
+
+    def _hide(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
 
 # ── Voice presets ────────────────────────────────────────────────────────────
 VOICE_PRESETS = {
@@ -540,6 +568,12 @@ class CorrectionsDialog:
         add_frame = ttk.Frame(self.win)
         add_frame.pack(fill="x", **pad)
 
+        # Example hint
+        hint_frame = ttk.Frame(self.win)
+        hint_frame.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(hint_frame, text="e.g.  Find: 你好   Replace with: ni hao",
+                  font=("Segoe UI", 8, "italic"), foreground="#666666").pack(anchor="w")
+
         self._add_orig = tk.StringVar()
         self._add_repl = tk.StringVar()
         ttk.Label(add_frame, text="Add:").pack(side="left", padx=(0, 4))
@@ -787,10 +821,15 @@ class PPTTTSApp:
         file_frame = ttk.LabelFrame(self.root, text="PowerPoint File", padding=8)
         file_frame.pack(fill="x", **pad)
 
-        ttk.Entry(file_frame, textvariable=self.input_path, width=60).pack(
-            side="left", fill="x", expand=True, padx=(0, 8))
+        self.file_entry = ttk.Entry(file_frame, textvariable=self.input_path, width=60)
+        self.file_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.browse_btn = ttk.Button(file_frame, text="Browse...", command=self._browse_file)
         self.browse_btn.pack(side="right")
+
+        # Drag-and-drop support
+        windnd.hook_dropfiles(self.file_entry, func=self._on_drop)
+        ToolTip(self.file_entry, "Drag a .pptx file here, or click Browse")
+        ToolTip(self.browse_btn, "Select a PowerPoint file (.pptx)")
 
         # ── Options ─────────────────────────────────────────────────────
         opt_frame = ttk.LabelFrame(self.root, text="Options", padding=8)
@@ -802,10 +841,10 @@ class PPTTTSApp:
             values=[f"{k} — {v}" for k, v in PRESET_LABELS.items()],
         )
         preset_combo.grid(row=0, column=1, sticky="w")
-        # Map display label back to key
         self._preset_keys = list(PRESET_LABELS.keys())
         self._preset_combo = preset_combo
         preset_combo.current(0)
+        ToolTip(preset_combo, "Voice and language for narration (auto-detected from filename)")
 
         ttk.Label(opt_frame, text="Slides:").grid(
             row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
@@ -813,11 +852,13 @@ class PPTTTSApp:
         slides_entry.grid(row=1, column=1, sticky="w", pady=(6, 0))
         ttk.Label(opt_frame, text="optional, e.g. 1,3,5-8").grid(
             row=1, column=2, sticky="w", padx=(6, 0), pady=(6, 0))
+        ToolTip(slides_entry, "Leave blank for all slides, or specify e.g. 1,3,5-8")
 
         self.pronunciation_btn = ttk.Button(opt_frame, text="Pronunciation...",
                    command=self._open_corrections)
         self.pronunciation_btn.grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ToolTip(self.pronunciation_btn, "Define rules to correct how words are spoken (e.g. acronyms, names)")
 
         # ── Generate button ─────────────────────────────────────────────
         btn_frame = ttk.Frame(self.root)
@@ -829,6 +870,7 @@ class PPTTTSApp:
             activebackground="#45a049", activeforeground="white",
             relief="raised", padx=20, pady=6, cursor="hand2")
         self.generate_btn.pack(side="left")
+        ToolTip(self.generate_btn, "Generate narration audio for all slides")
 
         self.cancel_btn = tk.Button(
             btn_frame, text="Cancel", command=self._on_cancel,
@@ -868,10 +910,20 @@ class PPTTTSApp:
         path = filedialog.askopenfilename(
             filetypes=[("PowerPoint files", "*.pptx"), ("All files", "*.*")])
         if path:
-            self.input_path.set(path)
-            detected = detect_language(path)
-            idx = self._preset_keys.index(detected) if detected in self._preset_keys else 0
-            self._preset_combo.current(idx)
+            self._set_input_file(path)
+
+    def _on_drop(self, file_paths):
+        path = file_paths[0].decode("utf-8") if isinstance(file_paths[0], bytes) else file_paths[0]
+        if path.lower().endswith(".pptx"):
+            self._set_input_file(path)
+        else:
+            messagebox.showwarning("Invalid file", "Please drop a .pptx file.")
+
+    def _set_input_file(self, path: str):
+        self.input_path.set(path)
+        detected = detect_language(path)
+        idx = self._preset_keys.index(detected) if detected in self._preset_keys else 0
+        self._preset_combo.current(idx)
 
     def _resolve_preset_key(self) -> str:
         combo_val = self.preset_var.get()

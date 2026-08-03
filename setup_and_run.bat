@@ -40,7 +40,7 @@ exit /b 1
 echo %YELLOW%Checking dependencies...%RESET%
 
 REM Check if dependencies are already installed
-%PYTHON% -c "import pptx, boto3, lxml" >nul 2>&1
+%PYTHON% -c "import pptx, boto3, lxml, windnd" >nul 2>&1
 if %errorlevel% neq 0 (
     echo Installing dependencies (this may take a minute^)...
     %PYTHON% -m pip install -r requirements.txt --quiet --disable-pip-version-check 2>nul
