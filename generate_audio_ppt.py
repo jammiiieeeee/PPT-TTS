@@ -281,7 +281,7 @@ def normalize_audio_for_storyline(output_path: Path, callback=None) -> bool:
 
         total_slides = pres.Slides.Count
         if callback:
-            callback(f"Normalizing audio on slide 1 of {total_slides} (temp: first slide only)...")
+            callback(f"Normalizing audio on slide 1 of {total_slides}...")
 
         # TEMP: only normalize first slide for faster testing
         for slide_idx in range(1, 2):
