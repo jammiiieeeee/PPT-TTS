@@ -458,10 +458,10 @@ def cli_main(args=None):
 class CorrectionsDialog:
     """Separate window for managing per-voice pronunciation corrections."""
 
-    def __init__(self, parent: tk.Tk, config: dict):
+    def __init__(self, parent: tk.Tk, config: dict, initial_voice: str = "mandarin"):
         self.config = config
         self.pronunciations = load_pronunciations(config)
-        self.active_voice = tk.StringVar(value="mandarin")
+        self.active_voice = tk.StringVar(value=initial_voice)
 
         self.win = tk.Toplevel(parent)
         self.win.title("Pronunciation Corrections")
@@ -483,12 +483,17 @@ class CorrectionsDialog:
         # Voice selector
         top = ttk.Frame(self.win)
         top.pack(fill="x", **pad)
-        ttk.Label(top, text="Voice:").pack(side="left", padx=(0, 6))
+        ttk.Label(top, text="Language:").pack(side="left", padx=(0, 6))
         voices = [f"{k} — {PRESET_LABELS[k]}" for k in VOICE_PRESETS]
         cb = ttk.Combobox(top, textvariable=self.active_voice, state="readonly",
                           width=30, values=voices)
         cb.pack(side="left")
-        cb.current(0)
+        # Set initial selection to match the main window's language
+        try:
+            initial_idx = list(VOICE_PRESETS.keys()).index(self.active_voice.get())
+            cb.current(initial_idx)
+        except ValueError:
+            cb.current(0)
 
         # Scrollable list area
         list_frame = ttk.LabelFrame(self.win, text="Corrections", padding=4)
@@ -510,9 +515,9 @@ class CorrectionsDialog:
         # Column headers
         hdr = ttk.Frame(self._inner)
         hdr.pack(fill="x", pady=(0, 2))
-        ttk.Label(hdr, text="Original", width=18, anchor="w").pack(side="left", padx=(4, 2))
+        ttk.Label(hdr, text="Find", width=18, anchor="w").pack(side="left", padx=(4, 2))
         ttk.Label(hdr, text="", width=3).pack(side="left")
-        ttk.Label(hdr, text="Replacement", width=18, anchor="w").pack(side="left", padx=(2, 2))
+        ttk.Label(hdr, text="Replace With", width=18, anchor="w").pack(side="left", padx=(2, 2))
 
         # Add row
         add_frame = ttk.Frame(self.win)
@@ -520,7 +525,7 @@ class CorrectionsDialog:
 
         self._add_orig = tk.StringVar()
         self._add_repl = tk.StringVar()
-        ttk.Label(add_frame, text="New:").pack(side="left", padx=(0, 4))
+        ttk.Label(add_frame, text="Add:").pack(side="left", padx=(0, 4))
         ttk.Entry(add_frame, textvariable=self._add_orig, width=16).pack(
             side="left", padx=(0, 4))
         ttk.Label(add_frame, text="→").pack(side="left", padx=(0, 4))
@@ -531,7 +536,7 @@ class CorrectionsDialog:
         # Bottom buttons
         btn_frame = ttk.Frame(self.win)
         btn_frame.pack(fill="x", **pad)
-        ttk.Button(btn_frame, text="Preview", command=self._on_preview).pack(side="left")
+        ttk.Button(btn_frame, text="Preview Changes", command=self._on_preview).pack(side="left")
         ttk.Button(btn_frame, text="Save & Close", command=self._on_save_close).pack(
             side="right")
 
@@ -731,7 +736,7 @@ class CorrectionsDialog:
 class PPTTTSApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("PPT TTS — PowerPoint Narrator")
+        self.root.title("PowerPoint Narrator")
         self.root.geometry("640x520")
         self.root.resizable(False, False)
 
@@ -753,14 +758,14 @@ class PPTTTSApp:
 
         ttk.Entry(file_frame, textvariable=self.input_path, width=60).pack(
             side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Button(file_frame, text="Browse ...", command=self._browse_file).pack(
+        ttk.Button(file_frame, text="Browse...", command=self._browse_file).pack(
             side="right")
 
         # ── Options ─────────────────────────────────────────────────────
         opt_frame = ttk.LabelFrame(self.root, text="Options", padding=8)
         opt_frame.pack(fill="x", **pad)
 
-        ttk.Label(opt_frame, text="Voice:").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(opt_frame, text="Language:").grid(row=0, column=0, sticky="w", padx=(0, 8))
         preset_combo = ttk.Combobox(
             opt_frame, textvariable=self.preset_var, state="readonly", width=28,
             values=[f"{k} — {v}" for k, v in PRESET_LABELS.items()],
@@ -771,20 +776,20 @@ class PPTTTSApp:
         self._preset_combo = preset_combo
         preset_combo.current(0)
 
-        ttk.Label(opt_frame, text="Slides (opt):").grid(
+        ttk.Label(opt_frame, text="Slides:").grid(
             row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         slides_entry = ttk.Entry(opt_frame, textvariable=self.slides_var, width=28)
         slides_entry.grid(row=1, column=1, sticky="w", pady=(6, 0))
-        ttk.Label(opt_frame, text="e.g. 1,3,5-8").grid(
+        ttk.Label(opt_frame, text="optional, e.g. 1,3,5-8").grid(
             row=1, column=2, sticky="w", padx=(6, 0), pady=(6, 0))
 
-        ttk.Button(opt_frame, text="Corrections...",
+        ttk.Button(opt_frame, text="Pronunciation...",
                    command=self._open_corrections).grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         # ── Generate button ─────────────────────────────────────────────
         self.generate_btn = ttk.Button(
-            self.root, text="Generate", command=self._on_generate)
+            self.root, text="Generate Audio", command=self._on_generate)
         self.generate_btn.pack(pady=8)
 
         # ── Log area ────────────────────────────────────────────────────
@@ -809,7 +814,13 @@ class PPTTTSApp:
             self._preset_combo.current(idx)
 
     def _open_corrections(self):
-        CorrectionsDialog(self.root, self.config)
+        preset_key = self._preset_keys[0]  # default
+        combo_val = self.preset_var.get()
+        for k in self._preset_keys:
+            if combo_val.startswith(k):
+                preset_key = k
+                break
+        CorrectionsDialog(self.root, self.config, initial_voice=preset_key)
 
     def _log(self, msg: str):
         def _append():
