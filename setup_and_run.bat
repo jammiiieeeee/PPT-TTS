@@ -2,12 +2,13 @@
 cd /d "%~dp0"
 title PowerPoint Narrator
 
-REM ── Colors ────────────────────────────────────────────────────────────────
-set "GREEN=[92m"
-set "RED=[91m"
-set "YELLOW=[93m"
-set "CYAN=[96m"
-set "RESET=[0m"
+REM Setup proper ANSI escape character for colors
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+set "GREEN=%ESC%[92m"
+set "RED=%ESC%[91m"
+set "YELLOW=%ESC%[93m"
+set "CYAN=%ESC%[96m"
+set "RESET=%ESC%[0m"
 
 echo.
 echo %CYAN%========================================%RESET%
