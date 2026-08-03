@@ -1068,27 +1068,46 @@ class PPTTTSApp:
     def _show_completion_dialog(self, output_path: Path):
         dialog = tk.Toplevel(self.root)
         dialog.title("Complete")
-        dialog.geometry("360x180")
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.bind("<Escape>", lambda e: dialog.destroy())
 
-        pad = {"padx": 16, "pady": 6}
-        ttk.Label(dialog, text="Audio generation complete!",
-                  font=("Segoe UI", 11, "bold")).pack(**pad)
-        ttk.Label(dialog, text=f"Saved to:\n{output_path}",
-                  font=("Segoe UI", 9), wraplength=320).pack(padx=16, pady=(0, 12))
+        # Content frame with generous padding
+        content = ttk.Frame(dialog, padding=24)
+        content.pack(fill="both", expand=True)
 
-        btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(fill="x", padx=16, pady=(0, 12))
-        ttk.Button(btn_frame, text="Open File",
-                   command=lambda: [os.startfile(str(output_path)), dialog.destroy()]).pack(
-            side="left", padx=(0, 8))
+        # Checkmark icon (text-based since no image)
+        ttk.Label(content, text="Done",
+                  font=("Segoe UI", 14, "bold")).pack(pady=(0, 8))
+
+        ttk.Label(content, text="Audio generation complete!",
+                  font=("Segoe UI", 10)).pack(pady=(0, 4))
+
+        # File path in a subtle frame
+        path_frame = ttk.Frame(content)
+        path_frame.pack(fill="x", pady=(0, 16))
+        ttk.Label(path_frame, text=str(output_path),
+                  font=("Consolas", 8), foreground="#555555",
+                  wraplength=350).pack()
+
+        # Button row - right-aligned
+        btn_frame = ttk.Frame(content)
+        btn_frame.pack(fill="x")
+        ttk.Button(btn_frame, text="Close",
+                   command=dialog.destroy).pack(side="right")
         ttk.Button(btn_frame, text="Open Folder",
                    command=lambda: [os.startfile(str(output_path.parent)), dialog.destroy()]).pack(
-            side="left", padx=(0, 8))
-        ttk.Button(btn_frame, text="Close", command=dialog.destroy).pack(side="left")
+            side="right", padx=(0, 8))
+        ttk.Button(btn_frame, text="Open File",
+                   command=lambda: [os.startfile(str(output_path)), dialog.destroy()]).pack(
+            side="right", padx=(0, 8))
+
+        # Center on parent
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
+        dialog.geometry(f"+{x}+{y}")
 
 
 def _append_set(app, full_text):
