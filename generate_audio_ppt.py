@@ -964,8 +964,7 @@ class PPTTTSApp:
                 self.root.after(0, lambda: self.progress_var.set(100))
                 self.root.after(0, lambda: self.progress_label.configure(text="Complete"))
                 self.root.after(1000, lambda: self.progress_frame.pack_forget())
-                self.root.after(0, lambda: messagebox.showinfo(
-                    "Complete", f"Saved to:\n{output_path}"))
+                self.root.after(0, lambda: self._show_completion_dialog(output_path))
             except InterruptedError:
                 self._log("Cancelled by user")
                 self.root.after(0, lambda: self.progress_label.configure(text="Cancelled"))
@@ -992,6 +991,30 @@ class PPTTTSApp:
             self.cancel_flag.set()
             self.cancel_btn.configure(state="disabled")
             self.progress_label.configure(text="Stopping...")
+
+    def _show_completion_dialog(self, output_path: Path):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Complete")
+        dialog.geometry("360x180")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        pad = {"padx": 16, "pady": 6}
+        ttk.Label(dialog, text="Audio generation complete!",
+                  font=("Segoe UI", 11, "bold")).pack(**pad)
+        ttk.Label(dialog, text=f"Saved to:\n{output_path}",
+                  font=("Segoe UI", 9), wraplength=320).pack(padx=16, pady=(0, 12))
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill="x", padx=16, pady=(0, 12))
+        ttk.Button(btn_frame, text="Open File",
+                   command=lambda: [os.startfile(str(output_path)), dialog.destroy()]).pack(
+            side="left", padx=(0, 8))
+        ttk.Button(btn_frame, text="Open Folder",
+                   command=lambda: [os.startfile(str(output_path.parent)), dialog.destroy()]).pack(
+            side="left", padx=(0, 8))
+        ttk.Button(btn_frame, text="Close", command=dialog.destroy).pack(side="left")
 
 
 def _append_set(app, full_text):
