@@ -107,17 +107,7 @@ if not exist "%SHORTCUT_PATH%" (
     echo.
     echo %YELLOW%Creating desktop shortcut...%RESET%
     set "SCRIPT_DIR=%~dp0"
-    (
-        echo Set oWS = WScript.CreateObject^("WScript.Shell"^)
-        echo sLinkFile = "%SHORTCUT_PATH%"
-        echo Set oLink = oWS.CreateShortcut^(sLinkFile^)
-        echo oLink.TargetPath = "%SCRIPT_DIR%generate_audio_ppt.py"
-        echo oLink.WorkingDirectory = "%SCRIPT_DIR%"
-        echo oLink.Description = "PowerPoint Narrator"
-        echo oLink.Save
-    ) > "%TEMP%\create_shortcut.vbs"
-    cscript //nologo "%TEMP%\create_shortcut.vbs"
-    del "%TEMP%\create_shortcut.vbs"
+    powershell -NoProfile -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT_PATH%'); $s.TargetPath='%SCRIPT_DIR%generate_audio_ppt.py'; $s.WorkingDirectory='%SCRIPT_DIR%'; $s.Description='PowerPoint Narrator'; $s.Save()"
     if exist "%SHORTCUT_PATH%" (
         echo %GREEN%Desktop shortcut created.%RESET%
         echo.
