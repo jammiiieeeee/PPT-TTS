@@ -1,15 +1,56 @@
 @echo off
-echo ===================================
-echo   Building PPT-TTS executable
-echo ===================================
+cd /d "%~dp0"
+title Building PowerPoint Narrator
 
-REM Install build dependencies (use python -m pip to avoid Device Guard blocks)
-python -m pip install pyinstaller python-pptx boto3 lxml pywin32 --user
-
-REM Build
-python -m PyInstaller PPT-TTS.spec --clean --noconfirm
+set "GREEN=[92m"
+set "RED=[91m"
+set "YELLOW=[93m"
+set "CYAN=[96m"
+set "RESET=[0m"
 
 echo.
-echo Build complete! Output: dist\PPT-TTS.exe
-echo Copy both PPT-TTS.exe and config.json to distribute.
+echo %CYAN%========================================%RESET%
+echo %CYAN%   Building PowerPoint Narrator%RESET%
+echo %CYAN%========================================%RESET%
+echo.
+
+REM ── Check for spec file ───────────────────────────────────────────────────
+if not exist PPT-TTS.spec (
+    echo %RED%ERROR: PPT-TTS.spec not found.%RESET%
+    echo Run this script from the project root directory.
+    pause
+    exit /b 1
+)
+
+REM ── Install build dependencies ────────────────────────────────────────────
+echo %YELLOW%Installing build dependencies...%RESET%
+python -m pip install pyinstaller python-pptx boto3 lxml pywin32 --quiet --user 2>nul
+if %errorlevel% neq 0 (
+    echo %RED%ERROR: Failed to install build dependencies.%RESET%
+    pause
+    exit /b 1
+)
+echo %GREEN%Dependencies ready.%RESET%
+
+REM ── Build ─────────────────────────────────────────────────────────────────
+echo.
+echo %YELLOW%Building executable...%RESET%
+python -m PyInstaller PPT-TTS.spec --clean --noconfirm
+if %errorlevel% neq 0 (
+    echo.
+    echo %RED%ERROR: Build failed. Check the output above for errors.%RESET%
+    pause
+    exit /b 1
+)
+
+echo.
+echo %GREEN%Build complete!%RESET%
+echo.
+echo Output: dist\PPT-TTS.exe
+echo.
+echo To distribute:
+echo   1. Copy dist\PPT-TTS.exe
+echo   2. Copy config.json (with your AWS credentials)
+echo   3. Place both in the same folder on the target machine
+echo.
 pause

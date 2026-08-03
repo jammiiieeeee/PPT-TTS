@@ -1,82 +1,105 @@
 @echo off
 cd /d "%~dp0"
-echo ===================================
-echo   PPT TTS - First Time Setup
-echo ===================================
+title PowerPoint Narrator
 
-REM Detect Python command
+REM ── Colors ────────────────────────────────────────────────────────────────
+set "GREEN=[92m"
+set "RED=[91m"
+set "YELLOW=[93m"
+set "CYAN=[96m"
+set "RESET=[0m"
+
+echo.
+echo %CYAN%========================================%RESET%
+echo %CYAN%   PowerPoint Narrator%RESET%
+echo %CYAN%========================================%RESET%
+echo.
+
+REM ── Detect Python ─────────────────────────────────────────────────────────
 where python >nul 2>&1
 if %errorlevel% equ 0 (
-    set PYTHON=python
-    goto :found
+    set "PYTHON=python"
+    goto :check_deps
 )
 where py >nul 2>&1
 if %errorlevel% equ 0 (
-    set PYTHON=py
-    goto :found
+    set "PYTHON=py"
+    goto :check_deps
 )
 
+echo %RED%ERROR: Python is not installed or not in PATH.%RESET%
 echo.
-echo ERROR: Python is not installed or not in PATH.
+echo Install Python from: https://www.python.org/downloads/
+echo Check "Add Python to PATH" during install.
 echo.
-echo Install Python from https://www.python.org/downloads/
-echo IMPORTANT: Check "Add Python to PATH" during install, then run this script again.
 pause
 exit /b 1
 
-:found
-echo Found: %PYTHON%
-%PYTHON% --version
+:check_deps
+echo %YELLOW%Checking dependencies...%RESET%
 
-%PYTHON% -m pip install -r requirements.txt --quiet --disable-pip-version-check 2>nul
+REM Check if dependencies are already installed
+%PYTHON% -c "import pptx, boto3, lxml" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
-    echo ERROR: Failed to install dependencies.
-    pause
-    exit /b 1
+    echo Installing dependencies (this may take a minute^)...
+    %PYTHON% -m pip install -r requirements.txt --quiet --disable-pip-version-check 2>nul
+    if %errorlevel% neq 0 (
+        echo.
+        echo %RED%ERROR: Failed to install dependencies.%RESET%
+        echo Try running: pip install -r requirements.txt
+        pause
+        exit /b 1
+    )
+    echo %GREEN%Dependencies installed.%RESET%
+) else (
+    echo %GREEN%Dependencies ready.%RESET%
 )
 
-REM Create config.json from template if it doesn't exist
+REM ── Check AWS credentials ─────────────────────────────────────────────────
 if not exist config.json (
+    echo.
+    echo %YELLOW%Creating config.json template...%RESET%
     %PYTHON% -c "import json; json.dump({'aws': {'access_key_id': 'YOUR_AWS_ACCESS_KEY_ID', 'secret_access_key': 'YOUR_AWS_SECRET_ACCESS_KEY', 'region': 'us-east-1'}}, open('config.json', 'w'), indent=4)"
 )
 
-REM Validate config.json and test AWS credentials
 %PYTHON% -c "import json,sys; c=json.load(open('config.json')); aws=c.get('aws',{}); k=aws.get('access_key_id',''); s=aws.get('secret_access_key',''); sys.exit(0 if k and s and not k.startswith('YOUR_') and not s.startswith('YOUR_') else 1)" 2>nul
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: config.json is missing AWS credentials.
+    echo %RED%ERROR: AWS credentials not configured.%RESET%
     echo.
-    echo Please make sure config.json has your AWS Access Key ID and Secret Access Key.
-    echo You can get these from the AWS Console under IAM > Users > Security credentials.
+    echo Open config.json and add your AWS credentials:
+    echo   - Access Key ID
+    echo   - Secret Access Key
     echo.
-    echo Opening config.json for you to edit...
+    echo Get these from: AWS Console ^> IAM ^> Users ^> Security credentials
+    echo.
     notepad config.json
     echo.
-    echo After saving the file, run this script again.
+    echo Save the file and run this script again.
     pause
     exit /b 1
 )
 
+echo %GREEN%AWS credentials configured.%RESET%
+
+REM ── Test connection ───────────────────────────────────────────────────────
+echo.
+echo %YELLOW%Testing AWS connection...%RESET%
 %PYTHON% -c "import json,boto3; c=json.load(open('config.json')); aws=c['aws']; kw={'aws_access_key_id':aws['access_key_id'],'aws_secret_access_key':aws['secret_access_key'],'region_name':aws.get('region','us-east-1')}; v=aws.get('verify_ssl',False); kw['verify']=v; sts=boto3.client('sts',**kw); r=sts.get_caller_identity(); print(f'Authenticated as: {r[\"Arn\"]}')" 2>nul
 if %errorlevel% neq 0 (
     echo.
-    echo ERROR: AWS credentials are invalid or expired.
+    echo %RED%ERROR: AWS credentials are invalid or expired.%RESET%
     echo.
-    echo Please check that your Access Key ID and Secret Access Key are correct.
-    echo Keys can be regenerated in the AWS Console under IAM > Users > Security credentials.
+    echo Please check your credentials in config.json.
     echo.
-    echo Opening config.json for you to edit...
     notepad config.json
-    echo.
-    echo After saving the file, run this script again.
     pause
     exit /b 1
 )
 
 echo.
-echo Starting PPT TTS...
+echo %GREEN%All checks passed!%RESET%
+echo.
+echo %CYAN%Starting PowerPoint Narrator...%RESET%
 echo.
 %PYTHON% generate_audio_ppt.py
-
-pause
