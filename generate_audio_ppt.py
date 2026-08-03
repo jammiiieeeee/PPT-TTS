@@ -229,9 +229,16 @@ def embed_audio_on_slide(slide, audio_path: str) -> None:
 
 
 def normalize_audio_for_storyline(output_path: Path, callback=None) -> bool:
-    """Open in PowerPoint via COM, nudge each shape to trigger media normalization."""
+    """Open in PowerPoint via COM, nudge each shape to trigger media normalization.
+
+    This step is required for Storyline 360 to properly play embedded audio.
+    PowerPoint normalizes the media format when the file is opened and shapes
+    are interacted with.
+    """
     abs_path = str(output_path.resolve())
     log.info("Normalizing audio for Storyline via PowerPoint COM ...")
+    if callback:
+        callback("Normalizing audio for Storyline compatibility...")
     try:
         import time
 
@@ -239,12 +246,19 @@ def normalize_audio_for_storyline(output_path: Path, callback=None) -> bool:
         import win32com.client
 
         pythoncom.CoInitialize()
+        if callback:
+            callback("Opening file in PowerPoint...")
         ppt = win32com.client.Dispatch("PowerPoint.Application")
         pres = ppt.Presentations.Open(abs_path, ReadOnly=False)
+
+        total_slides = pres.Slides.Count
+        if callback:
+            callback(f"Normalizing audio on {total_slides} slide(s)...")
 
         for slide_idx in range(1, pres.Slides.Count + 1):
             slide = pres.Slides(slide_idx)
             slide.Select()
+            has_media = False
             for shape_idx in range(1, slide.Shapes.Count + 1):
                 shape = slide.Shapes(shape_idx)
                 try:
@@ -253,11 +267,14 @@ def normalize_audio_for_storyline(output_path: Path, callback=None) -> bool:
                     mt = 0
                 if mt == 0:
                     continue
+                has_media = True
                 orig_left = shape.Left
                 shape.Left = orig_left + 1
                 time.sleep(0.05)
                 shape.Left = orig_left
                 log.debug("Nudged shape '%s' on slide %d", shape.Name, slide_idx)
+            if callback:
+                callback(f"Slide {slide_idx}/{total_slides}: {'audio normalized' if has_media else 'no audio'}")
 
         pres.Save()
         pres.Close()
@@ -265,16 +282,16 @@ def normalize_audio_for_storyline(output_path: Path, callback=None) -> bool:
         pythoncom.CoUninitialize()
         log.info("PowerPoint normalization complete")
         if callback:
-            callback("PowerPoint normalization complete")
+            callback("Audio normalization complete — ready for Storyline import")
         return True
     except Exception as e:
         err = str(e)
         log.warning("PowerPoint COM normalization failed: %s", err)
         if callback:
             if "not installed" in err.lower() or "cannot be found" in err.lower() or "class not registered" in err.lower() or "429" in err:
-                callback("WARNING: PowerPoint not found — audio embedded but Storyline may not play it. Install PowerPoint to enable normalization.")
+                callback("WARNING: PowerPoint not installed — audio embedded but may not work in Storyline. Install PowerPoint to enable normalization.")
             else:
-                callback(f"WARNING: PowerPoint normalization failed: {err}")
+                callback(f"WARNING: Normalization failed: {err}")
         try:
             pres.Close()
         except Exception:
@@ -363,7 +380,7 @@ def process_pptx(input_path: Path, output_path: Path, voice_id: str, engine: str
 
     normalize_audio_for_storyline(output_path, callback=callback)
 
-    emit(f"Done — {success_count} succeeded, {skip_count} skipped (no notes), {fail_count} failed")
+    emit(f"Done — {success_count} slide(s) narrated, {skip_count} skipped (no notes), {fail_count} failed")
     return {"success": success_count, "skipped": skip_count, "failed": fail_count}
 
 
