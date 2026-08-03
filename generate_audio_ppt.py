@@ -737,13 +737,14 @@ class PPTTTSApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("PowerPoint Narrator")
-        self.root.geometry("640x520")
+        self.root.geometry("640x580")
         self.root.resizable(False, False)
 
         self.input_path = tk.StringVar()
         self.preset_var = tk.StringVar(value="mandarin")
         self.slides_var = tk.StringVar()
         self.processing = False
+        self.cancel_flag = threading.Event()
         self.config = load_config()
         self.root._ppttts_app = self  # let the dialog find us via root
 
@@ -788,9 +789,37 @@ class PPTTTSApp:
             row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         # ── Generate button ─────────────────────────────────────────────
-        self.generate_btn = ttk.Button(
-            self.root, text="Generate Audio", command=self._on_generate)
-        self.generate_btn.pack(pady=8)
+        btn_frame = ttk.Frame(self.root)
+        btn_frame.pack(fill="x", padx=12, pady=8)
+
+        self.generate_btn = tk.Button(
+            btn_frame, text="Generate Audio", command=self._on_generate,
+            font=("Segoe UI", 11, "bold"), bg="#4CAF50", fg="white",
+            activebackground="#45a049", activeforeground="white",
+            relief="raised", padx=20, pady=6, cursor="hand2")
+        self.generate_btn.pack(side="left")
+
+        self.cancel_btn = tk.Button(
+            btn_frame, text="Cancel", command=self._on_cancel,
+            font=("Segoe UI", 10), bg="#f44336", fg="white",
+            activebackground="#d32f2f", activeforeground="white",
+            relief="raised", padx=12, pady=6, cursor="hand2")
+        self.cancel_btn.pack(side="left", padx=(8, 0))
+        self.cancel_btn.pack_forget()
+
+        # ── Progress bar ───────────────────────────────────────────────
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_frame = ttk.Frame(self.root)
+        self.progress_frame.pack(fill="x", padx=12, pady=(0, 4))
+
+        self.progress_label = ttk.Label(self.progress_frame, text="")
+        self.progress_label.pack(side="left", padx=(0, 8))
+
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame, variable=self.progress_var,
+            maximum=100, mode="determinate")
+        self.progress_bar.pack(side="left", fill="x", expand=True)
+        self.progress_frame.pack_forget()
 
         # ── Log area ────────────────────────────────────────────────────
         log_frame = ttk.LabelFrame(self.root, text="Status", padding=8)
@@ -869,12 +898,16 @@ class PPTTTSApp:
         slides_spec = self.slides_var.get().strip() or None
 
         self.processing = True
+        self.cancel_flag.clear()
         self.generate_btn.configure(state="disabled")
+        self.cancel_btn.pack(side="left", padx=(8, 0))
+        self.progress_var.set(0)
+        self.progress_label.configure(text="Starting...")
+        self.progress_frame.pack(fill="x", padx=12, pady=(0, 4))
         self._log_buffer = []
 
         def worker():
             try:
-                # Validate slide range early
                 if slides_spec:
                     prs = Presentation(str(input_path))
                     parse_slide_range(slides_spec, len(prs.slides))
@@ -882,26 +915,56 @@ class PPTTTSApp:
                 all_pronunciations = load_pronunciations(self.config)
                 voice_corrections = all_pronunciations.get(preset_key, [])
 
+                def progress_callback(msg):
+                    self._log(msg)
+                    if self.cancel_flag.is_set():
+                        raise InterruptedError("Cancelled by user")
+                    if "synthesizing" in msg.lower() or "processing" in msg.lower():
+                        try:
+                            current = msg.split("(")[1].split(")")[0]
+                            parts = current.split("/")
+                            done = int(parts[0])
+                            total = int(parts[1])
+                            pct = (done / total) * 100
+                            self.root.after(0, lambda p=pct: self.progress_var.set(p))
+                            self.root.after(0, lambda d=done, t=total: self.progress_label.configure(text=f"Processing slide {d} of {t}"))
+                        except Exception:
+                            pass
+
                 process_pptx(
                     input_path, output_path,
                     voice_id=preset["voice"],
                     engine="neural",
                     lang_code=preset["lang"],
                     slides_spec=slides_spec,
-                    callback=self._log,
+                    callback=progress_callback,
                     pronunciations=voice_corrections,
                 )
+                self.root.after(0, lambda: self.progress_var.set(100))
+                self.root.after(0, lambda: self.progress_label.configure(text="Complete"))
+                self.root.after(1000, lambda: self.progress_frame.pack_forget())
                 self.root.after(0, lambda: messagebox.showinfo(
                     "Complete", f"Saved to:\n{output_path}"))
+            except InterruptedError:
+                self._log("Cancelled by user")
+                self.root.after(0, lambda: self.progress_label.configure(text="Cancelled"))
+                self.root.after(1000, lambda: self.progress_frame.pack_forget())
             except Exception as e:
                 self._log(f"ERROR: {e}")
+                self.root.after(0, lambda: self.progress_frame.pack_forget())
                 self.root.after(0, lambda: messagebox.showerror(
                     "Error", str(e)))
             finally:
                 self.processing = False
+                self.cancel_flag.clear()
                 self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
+                self.root.after(0, lambda: self.cancel_btn.pack_forget())
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_cancel(self):
+        if self.processing:
+            self.cancel_flag.set()
 
 
 def _append_set(app, full_text):
