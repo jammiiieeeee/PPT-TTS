@@ -102,11 +102,11 @@ echo.
 echo %GREEN%All checks passed!%RESET%
 
 REM ── Create desktop shortcut (first run only) ──────────────────────────────
+set "SCRIPT_DIR=%~dp0"
 set "SHORTCUT_PATH=%USERPROFILE%\Desktop\PowerPoint Narrator.lnk"
 if not exist "%SHORTCUT_PATH%" (
     echo.
     echo %YELLOW%Creating desktop shortcut...%RESET%
-    set "SCRIPT_DIR=%~dp0"
     powershell -NoProfile -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT_PATH%'); $s.TargetPath='%SCRIPT_DIR%generate_audio_ppt.py'; $s.WorkingDirectory='%SCRIPT_DIR%'; $s.Description='PowerPoint Narrator'; $s.Save()"
     if exist "%SHORTCUT_PATH%" (
         echo %GREEN%Desktop shortcut created.%RESET%
