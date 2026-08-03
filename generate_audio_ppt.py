@@ -896,16 +896,23 @@ class PPTTTSApp:
         self.progress_frame.pack_forget()
 
         # ── Log area ────────────────────────────────────────────────────
-        log_frame = ttk.LabelFrame(self.root, text="Status", padding=8)
-        log_frame.pack(fill="both", expand=True, **pad)
+        self.log_frame = ttk.LabelFrame(self.root, text="Status", padding=8)
+        self.log_frame.pack(fill="both", expand=True, **pad)
 
-        self.log_text = tk.Text(log_frame, height=12, state="disabled",
+        self.log_text = tk.Text(self.log_frame, height=12, state="disabled",
                                 wrap="word", font=("Consolas", 9))
-        scrollbar = ttk.Scrollbar(log_frame, orient="vertical",
+        scrollbar = ttk.Scrollbar(self.log_frame, orient="vertical",
                                   command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self.log_text.pack(fill="both", expand=True)
+
+        # ── Keyboard shortcuts ──────────────────────────────────────────
+        self.root.bind("<Control-o>", lambda e: self._browse_file())
+        self.root.bind("<Control-O>", lambda e: self._browse_file())
+        self.root.bind("<Control-g>", lambda e: self._on_generate())
+        self.root.bind("<Control-G>", lambda e: self._on_generate())
+        self.root.bind("<Escape>", lambda e: self._on_cancel() if self.processing else None)
 
     def _browse_file(self):
         path = filedialog.askopenfilename(
@@ -974,6 +981,7 @@ class PPTTTSApp:
         self.browse_btn.configure(state="disabled")
         self._preset_combo.configure(state="disabled")
         self.pronunciation_btn.configure(state="disabled")
+        self.log_frame.configure(text="Status — Processing")
         self.progress_var.set(0)
         self.progress_label.configure(text="Starting...")
         self.progress_frame.pack(fill="x", padx=12, pady=(0, 4))
@@ -1023,10 +1031,21 @@ class PPTTTSApp:
                 self.root.after(0, lambda: self.progress_label.configure(text="Cancelled"))
                 self.root.after(1000, lambda: self.progress_frame.pack_forget())
             except Exception as e:
-                self._log(f"ERROR: {e}")
+                err_msg = str(e)
+                self._log(f"ERROR: {err_msg}")
                 self.root.after(0, lambda: self.progress_frame.pack_forget())
+                if "credentials" in err_msg.lower() or "access" in err_msg.lower() or "authenticat" in err_msg.lower():
+                    suggestion = "Check your AWS credentials in config.json."
+                elif "timeout" in err_msg.lower() or "connect" in err_msg.lower():
+                    suggestion = "Check your internet connection and try again."
+                elif "no such file" in err_msg.lower() or "not found" in err_msg.lower():
+                    suggestion = "The input file was moved or deleted. Select it again."
+                elif "permission" in err_msg.lower():
+                    suggestion = "Close the file if it's open in PowerPoint, then try again."
+                else:
+                    suggestion = "Check the Status log for details."
                 self.root.after(0, lambda: messagebox.showerror(
-                    "Error", str(e)))
+                    "Error", f"{err_msg}\n\n{suggestion}"))
             finally:
                 self.processing = False
                 self.cancel_flag.clear()
@@ -1036,6 +1055,7 @@ class PPTTTSApp:
                 self.root.after(0, lambda: self.browse_btn.configure(state="normal"))
                 self.root.after(0, lambda: self._preset_combo.configure(state="readonly"))
                 self.root.after(0, lambda: self.pronunciation_btn.configure(state="normal"))
+                self.root.after(0, lambda: self.log_frame.configure(text="Status"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1052,6 +1072,7 @@ class PPTTTSApp:
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
 
         pad = {"padx": 16, "pady": 6}
         ttk.Label(dialog, text="Audio generation complete!",
