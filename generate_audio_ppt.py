@@ -826,9 +826,9 @@ class PPTTTSApp:
         self.browse_btn = ttk.Button(file_frame, text="Browse...", command=self._browse_file)
         self.browse_btn.pack(side="right")
 
-        # Drag-and-drop support
-        windnd.hook_dropfiles(self.file_entry, func=self._on_drop)
-        ToolTip(self.file_entry, "Drag a .pptx file here, or click Browse")
+        # Drag-and-drop on the entire window
+        windnd.hook_dropfiles(self.root, func=self._on_drop)
+        ToolTip(self.file_entry, "Type a path or drag a .pptx file anywhere on this window")
         ToolTip(self.browse_btn, "Select a PowerPoint file (.pptx)")
 
         # ── Options ─────────────────────────────────────────────────────
