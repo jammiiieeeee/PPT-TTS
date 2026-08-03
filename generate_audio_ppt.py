@@ -567,9 +567,21 @@ class CorrectionsDialog:
             entry["frame"].destroy()
         self._rows.clear()
 
-        for i, item in enumerate(self._current_list()):
-            self._add_row(i, item)
+        corrections = self._current_list()
+        if corrections:
+            for i, item in enumerate(corrections):
+                self._add_row(i, item)
+        else:
+            self._show_empty_state()
         self._canvas.yview_moveto(0)
+
+    def _show_empty_state(self):
+        frame = ttk.Frame(self._inner)
+        frame.pack(fill="x", pady=(20, 10))
+        ttk.Label(frame, text="No pronunciation rules yet.",
+                  font=("Segoe UI", 9, "italic")).pack()
+        ttk.Label(frame, text="Add a rule below to correct how words are spoken.",
+                  font=("Segoe UI", 9)).pack()
 
     def _add_row(self, idx: int, item: dict):
         frame = ttk.Frame(self._inner)
@@ -633,6 +645,7 @@ class CorrectionsDialog:
             return
 
         key = self.active_voice.get().split(" — ")[0]
+        display_name = PRESET_LABELS.get(key, key)
         corrections = self.pronunciations.get(key, [])
 
         try:
@@ -642,7 +655,7 @@ class CorrectionsDialog:
             return
 
         preview_win = tk.Toplevel(self.win)
-        preview_win.title(f"Preview — {key}")
+        preview_win.title(f"Preview — {display_name}")
         preview_win.geometry("640x400")
         preview_win.transient(self.win)
 
@@ -703,7 +716,7 @@ class CorrectionsDialog:
         if total_replacements == 0:
             txt.insert("end", "No replacements to preview — no notes match any correction.\n")
 
-        preview_win.title(f"Preview — {key} ({total_replacements} replacement"
+        preview_win.title(f"Preview — {display_name} ({total_replacements} replacement"
                           f"{'s' if total_replacements != 1 else ''})")
         txt.configure(state="disabled")
 
@@ -776,8 +789,8 @@ class PPTTTSApp:
 
         ttk.Entry(file_frame, textvariable=self.input_path, width=60).pack(
             side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Button(file_frame, text="Browse...", command=self._browse_file).pack(
-            side="right")
+        self.browse_btn = ttk.Button(file_frame, text="Browse...", command=self._browse_file)
+        self.browse_btn.pack(side="right")
 
         # ── Options ─────────────────────────────────────────────────────
         opt_frame = ttk.LabelFrame(self.root, text="Options", padding=8)
@@ -801,8 +814,9 @@ class PPTTTSApp:
         ttk.Label(opt_frame, text="optional, e.g. 1,3,5-8").grid(
             row=1, column=2, sticky="w", padx=(6, 0), pady=(6, 0))
 
-        ttk.Button(opt_frame, text="Pronunciation...",
-                   command=self._open_corrections).grid(
+        self.pronunciation_btn = ttk.Button(opt_frame, text="Pronunciation...",
+                   command=self._open_corrections)
+        self.pronunciation_btn.grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         # ── Generate button ─────────────────────────────────────────────
@@ -859,24 +873,17 @@ class PPTTTSApp:
             idx = self._preset_keys.index(detected) if detected in self._preset_keys else 0
             self._preset_combo.current(idx)
 
-    def _open_corrections(self):
-        preset_key = self._preset_keys[0]  # default
+    def _resolve_preset_key(self) -> str:
         combo_val = self.preset_var.get()
         for k in self._preset_keys:
             if combo_val.startswith(k):
-                preset_key = k
-                break
-        CorrectionsDialog(self.root, self.config, initial_voice=preset_key)
+                return k
+        return self._preset_keys[0]
+
+    def _open_corrections(self):
+        CorrectionsDialog(self.root, self.config, initial_voice=self._resolve_preset_key())
 
     def _log(self, msg: str):
-        def _append():
-            self.log_text.configure(state="disabled")
-            self.log_text.delete("1.0", "end")
-            self.log_text.configure(state="normal")
-            self.log_text.insert("end", msg + "\n")
-            self.log_text.configure(state="disabled")
-            self.log_text.see("end")
-        # Accumulate logs in a buffer and display them
         if not hasattr(self, "_log_buffer"):
             self._log_buffer = []
         self._log_buffer.append(msg)
@@ -896,14 +903,7 @@ class PPTTTSApp:
             messagebox.showerror("File not found", f"Cannot find:\n{input_file}")
             return
 
-        # Resolve preset
-        preset_key = self._preset_keys[0]  # default
-        combo_val = self.preset_var.get()
-        for k in self._preset_keys:
-            if combo_val.startswith(k):
-                preset_key = k
-                break
-        preset = VOICE_PRESETS[preset_key]
+        preset = VOICE_PRESETS[self._resolve_preset_key()]
 
         input_path = Path(input_file)
         output_path = input_path.with_name(f"narrated_{input_path.stem}{input_path.suffix}")
@@ -918,12 +918,16 @@ class PPTTTSApp:
         self.cancel_flag.clear()
         self.generate_btn.configure(state="disabled")
         self.cancel_btn.pack(side="left", padx=(8, 0))
+        self.browse_btn.configure(state="disabled")
+        self._preset_combo.configure(state="disabled")
+        self.pronunciation_btn.configure(state="disabled")
         self.progress_var.set(0)
         self.progress_label.configure(text="Starting...")
         self.progress_frame.pack(fill="x", padx=12, pady=(0, 4))
         self._log_buffer = []
 
         def worker():
+            preset_key = self._resolve_preset_key()
             try:
                 if slides_spec:
                     prs = Presentation(str(input_path))
@@ -976,12 +980,18 @@ class PPTTTSApp:
                 self.cancel_flag.clear()
                 self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
                 self.root.after(0, lambda: self.cancel_btn.pack_forget())
+                self.root.after(0, lambda: self.cancel_btn.configure(state="normal"))
+                self.root.after(0, lambda: self.browse_btn.configure(state="normal"))
+                self.root.after(0, lambda: self._preset_combo.configure(state="readonly"))
+                self.root.after(0, lambda: self.pronunciation_btn.configure(state="normal"))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_cancel(self):
         if self.processing:
             self.cancel_flag.set()
+            self.cancel_btn.configure(state="disabled")
+            self.progress_label.configure(text="Stopping...")
 
 
 def _append_set(app, full_text):
