@@ -100,6 +100,32 @@ if %errorlevel% neq 0 (
 
 echo.
 echo %GREEN%All checks passed!%RESET%
+
+REM ── Create desktop shortcut (first run only) ──────────────────────────────
+set "SHORTCUT_PATH=%USERPROFILE%\Desktop\PowerPoint Narrator.lnk"
+if not exist "%SHORTCUT_PATH%" (
+    echo.
+    echo %YELLOW%Creating desktop shortcut...%RESET%
+    set "SCRIPT_DIR=%~dp0"
+    echo Set oWS = WScript.CreateObject("WScript.Shell") > "%TEMP%\create_shortcut.vbs"
+    echo sLinkFile = "%SHORTCUT_PATH%" >> "%TEMP%\create_shortcut.vbs"
+    echo Set oLink = oWS.CreateShortcut(sLinkFile) >> "%TEMP%\create_shortcut.vbs"
+    echo oLink.TargetPath = "%SCRIPT_DIR%generate_audio_ppt.py" >> "%TEMP%\create_shortcut.vbs"
+    echo oLink.WorkingDirectory = "%SCRIPT_DIR%" >> "%TEMP%\create_shortcut.vbs"
+    echo oLink.Description = "PowerPoint Narrator - Add TTS audio to slides" >> "%TEMP%\create_shortcut.vbs"
+    echo oLink.Save >> "%TEMP%\create_shortcut.vbs"
+    cscript //nologo "%TEMP%\create_shortcut.vbs"
+    del "%TEMP%\create_shortcut.vbs"
+    if exist "%SHORTCUT_PATH%" (
+        echo %GREEN%Desktop shortcut created.%RESET%
+        echo.
+        echo %CYAN%TIP: You can now run PowerPoint Narrator directly from your desktop.%RESET%
+        echo %CYAN%     This setup script is only needed for the first run.%RESET%
+    ) else (
+        echo %YELLOW%Could not create shortcut. You can still run this script directly.%RESET%
+    )
+)
+
 echo.
 echo %CYAN%Starting PowerPoint Narrator...%RESET%
 echo.
