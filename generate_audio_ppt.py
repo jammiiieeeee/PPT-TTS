@@ -83,19 +83,25 @@ def get_config_path() -> Path:
 
 
 def load_config() -> dict:
-    """Load config.json if it exists."""
+    """Load config.json if it exists. Returns {} on missing or corrupt file."""
     cfg_path = get_config_path()
     if cfg_path.exists():
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            log.warning("config.json is corrupt (%s) — using empty config", e)
     return {}
 
 
 def save_config(config: dict) -> None:
     """Write config back to config.json."""
     cfg_path = get_config_path()
-    with open(cfg_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=4, ensure_ascii=False)
+    try:
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+    except OSError as e:
+        log.warning("Could not save config.json: %s", e)
 
 
 _EMPTY_PRONUNCIATIONS = {k: [] for k in VOICE_PRESETS}
@@ -602,6 +608,10 @@ class CorrectionsDialog:
             entry["frame"].destroy()
         self._rows.clear()
 
+        if hasattr(self, "_empty_frame") and self._empty_frame is not None:
+            self._empty_frame.destroy()
+            self._empty_frame = None
+
         corrections = self._current_list()
         if corrections:
             for i, item in enumerate(corrections):
@@ -611,11 +621,11 @@ class CorrectionsDialog:
         self._canvas.yview_moveto(0)
 
     def _show_empty_state(self):
-        frame = ttk.Frame(self._inner)
-        frame.pack(fill="x", pady=(20, 10))
-        ttk.Label(frame, text="No pronunciation rules yet.",
+        self._empty_frame = ttk.Frame(self._inner)
+        self._empty_frame.pack(fill="x", pady=(20, 10))
+        ttk.Label(self._empty_frame, text="No pronunciation rules yet.",
                   font=("Segoe UI", 9, "italic")).pack()
-        ttk.Label(frame, text="Add a rule below to correct how words are spoken.",
+        ttk.Label(self._empty_frame, text="Add a rule below to correct how words are spoken.",
                   font=("Segoe UI", 9)).pack()
 
     def _add_row(self, idx: int, item: dict):
@@ -810,9 +820,13 @@ class PPTTTSApp:
         self.slides_var = tk.StringVar()
         self.processing = False
         self.cancel_flag = threading.Event()
+        self._log_lock = threading.Lock()
+        self._log_buffer: list[str] = []
+        self._worker_thread: threading.Thread | None = None
         self.config = load_config()
         self.root._ppttts_app = self  # let the dialog find us via root
 
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
 
     def _build_ui(self):
@@ -944,11 +958,13 @@ class PPTTTSApp:
         CorrectionsDialog(self.root, self.config, initial_voice=self._resolve_preset_key())
 
     def _log(self, msg: str):
-        if not hasattr(self, "_log_buffer"):
-            self._log_buffer = []
-        self._log_buffer.append(msg)
-        full = "\n".join(self._log_buffer)
-        self.root.after(0, _append_set, self, full)
+        with self._log_lock:
+            self._log_buffer.append(msg)
+            full = "\n".join(self._log_buffer)
+        try:
+            self.root.after(0, _append_set, self, full)
+        except tk.TclError:
+            pass
 
     def _on_generate(self):
         if self.processing:
@@ -963,6 +979,19 @@ class PPTTTSApp:
             messagebox.showerror("File not found", f"Cannot find:\n{input_file}")
             return
 
+        slides_spec = self.slides_var.get().strip() or None
+        if slides_spec:
+            try:
+                prs = Presentation(input_file)
+                parse_slide_range(slides_spec, len(prs.slides))
+            except ValueError as e:
+                messagebox.showerror("Invalid slide range",
+                                     f"{e}\n\nUse format like: 1,3,5-8")
+                return
+            except Exception as e:
+                messagebox.showerror("Error", f"Cannot open PPTX:\n{e}")
+                return
+
         preset = VOICE_PRESETS[self._resolve_preset_key()]
 
         input_path = Path(input_file)
@@ -971,8 +1000,6 @@ class PPTTTSApp:
         while output_path.exists():
             output_path = input_path.with_name(f"narrated_{input_path.stem}_{i}{input_path.suffix}")
             i += 1
-
-        slides_spec = self.slides_var.get().strip() or None
 
         self.processing = True
         self.cancel_flag.clear()
@@ -985,15 +1012,12 @@ class PPTTTSApp:
         self.progress_var.set(0)
         self.progress_label.configure(text="Starting...")
         self.progress_frame.pack(fill="x", padx=12, pady=(0, 4))
-        self._log_buffer = []
+        with self._log_lock:
+            self._log_buffer.clear()
 
         def worker():
             preset_key = self._resolve_preset_key()
             try:
-                if slides_spec:
-                    prs = Presentation(str(input_path))
-                    parse_slide_range(slides_spec, len(prs.slides))
-
                 all_pronunciations = load_pronunciations(self.config)
                 voice_corrections = all_pronunciations.get(preset_key, [])
 
@@ -1049,13 +1073,16 @@ class PPTTTSApp:
             finally:
                 self.processing = False
                 self.cancel_flag.clear()
-                self.root.after(0, lambda: self.generate_btn.configure(state="normal"))
-                self.root.after(0, lambda: self.cancel_btn.pack_forget())
-                self.root.after(0, lambda: self.cancel_btn.configure(state="normal"))
-                self.root.after(0, lambda: self.browse_btn.configure(state="normal"))
-                self.root.after(0, lambda: self._preset_combo.configure(state="readonly"))
-                self.root.after(0, lambda: self.pronunciation_btn.configure(state="normal"))
-                self.root.after(0, lambda: self.log_frame.configure(text="Status"))
+                self.root.after(0, self._restore_ui_state)
+
+    def _restore_ui_state(self):
+        self.generate_btn.configure(state="normal")
+        self.cancel_btn.pack_forget()
+        self.cancel_btn.configure(state="normal")
+        self.browse_btn.configure(state="normal")
+        self._preset_combo.configure(state="readonly")
+        self.pronunciation_btn.configure(state="normal")
+        self.log_frame.configure(text="Status")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1064,6 +1091,20 @@ class PPTTTSApp:
             self.cancel_flag.set()
             self.cancel_btn.configure(state="disabled")
             self.progress_label.configure(text="Stopping...")
+
+    def _on_close(self):
+        if self.processing:
+            result = messagebox.askyesno(
+                "Processing in progress",
+                "Audio generation is still running.\n\n"
+                "Are you sure you want to quit? "
+                "This will cancel the current job.")
+            if not result:
+                return
+            self.cancel_flag.set()
+            self.root.after(200, self.root.destroy)
+        else:
+            self.root.destroy()
 
     def _show_completion_dialog(self, output_path: Path):
         dialog = tk.Toplevel(self.root)
